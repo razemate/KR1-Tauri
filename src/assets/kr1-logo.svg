@@ -1,0 +1,21 @@
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1D4ED8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E40AF;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- K -->
+  <path d="M8 8 L8 32 M8 20 L20 8 M8 20 L20 32" stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- R -->
+  <path d="M28 8 L28 32 M28 8 L40 8 Q44 8 44 12 Q44 16 40 16 L28 16 M36 16 L44 32" stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- 1 -->
+  <path d="M56 8 L56 32 M52 12 L56 8 M52 32 L64 32" stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- Accent dot -->
+  <circle cx="72" cy="28" r="2" fill="url(#logoGradient)"/>
+</svg>

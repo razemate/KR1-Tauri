@@ -221,18 +221,25 @@ const ChatInterface = () => {
         </ReactMarkdown>
         
         {downloads.length > 0 && (
-          <div className="download-section">
-            <h4>📁 Downloads Available:</h4>
+          <div className="download-container">
+            <div className="download-header">
+              <FiDownload />
+              <span>Downloads Available</span>
+            </div>
             {downloads.map((download, index) => (
               <div key={index} className="download-item">
+                <div className="download-info">
+                  <FiFile />
+                  <span className="download-filename">{download.filename}</span>
+                  <span className="text-xs text-gray-500">({formatFileSize(new Blob([download.content]).size)})</span>
+                </div>
                 <button 
                   className="download-btn"
                   onClick={() => handleDownload(download.filename, download.content)}
                   title={`Download ${download.filename}`}
                 >
-                  <FiDownload className="download-icon" />
-                  <span className="download-filename">{download.filename}</span>
-                  <span className="download-size">({formatFileSize(new Blob([download.content]).size)})</span>
+                  <FiDownload />
+                  Download
                 </button>
               </div>
             ))}
@@ -446,18 +453,18 @@ const ChatInterface = () => {
             id="llm-model-selector"
             value={openRouterConfig.selectedModel} 
             onChange={(e) => setSelectedModel(e.target.value)}
-            className="bg-white text-gray-900 border border-gray-300 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="bg-white text-gray-900 border border-gray-300 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 llm-dropdown"
           >
             {openRouterConfig.availableModels.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
+              <option key={model.id} value={model.id} className="llm-option">
+                {model.name.replace('(Free)', '🆓 FREE')}
               </option>
             ))}
           </select>
         </div>
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${openRouterConfig.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
-          <span className="text-sm text-gray-700">
+          <span className={`text-sm ${openRouterConfig.isConnected ? 'connection-status' : 'text-gray-700'}`}>
             {openRouterConfig.isConnected ? 'Connected to OpenRouter' : 'Not Connected'}
           </span>
         </div>
@@ -475,15 +482,18 @@ const ChatInterface = () => {
           <MessageItem key={`${msg.timestamp || Date.now()}-${index}`} msg={msg} index={index} />
         ))}
         
-        {/* Loading Indicator */}
+        {/* Enhanced Loading Indicator */}
         {isLoading && (
           <div className="message assistant loading">
             <div className="message-role">OpenRouter AI</div>
             <div className="message-content">
-              <div className="typing-indicator">
-                <div className="typing-dot"></div>
-                <div className="typing-dot"></div>
-                <div className="typing-dot"></div>
+              <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="typing-indicator">
+                  <div className="typing-dot"></div>
+                  <div className="typing-dot"></div>
+                  <div className="typing-dot"></div>
+                </div>
+                <span className="text-blue-700 font-medium">AI is processing your request...</span>
               </div>
             </div>
           </div>

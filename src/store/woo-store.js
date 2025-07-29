@@ -48,6 +48,13 @@ const useStore = create((set, get) => ({
   messageCache: new Map(),
   lastSaveTime: 0,
   
+  // App Mode Management
+  appMode: "universal", // "universal" or "query_processor"
+  modeIndicator: {
+    status: "active", // "active", "standby", "processing"
+    color: "green" // "green", "yellow", "red"
+  },
+  
   // RAG Configuration
   ragConfig: {
     isInitialized: false,
@@ -78,21 +85,52 @@ const useStore = create((set, get) => ({
     ]
   },
 
+  // Load pre-installed credentials from .env.prod
+  loadPreInstalledCredentials: async () => {
+    try {
+      if (invoke) {
+        // Try to load pre-installed credentials from .env.prod
+        const preInstalledCreds = await invoke("load_env_credentials");
+        if (preInstalledCreds) {
+          set({
+            settings: {
+              ...get().settings,
+              wooUrl: preInstalledCreds.woo_base_url || DEFAULT_URL,
+              consumerKey: preInstalledCreds.woo_key || "",
+              consumerSecret: preInstalledCreds.woo_secret || "",
+              merchantguyUrl: preInstalledCreds.merchantguy_base_url || "https://secure.merchantguygateway.com/",
+              merchantguyApiKey: preInstalledCreds.merchantguy_key || ""
+            }
+          });
+          console.log('Pre-installed credentials loaded successfully');
+          return true;
+        }
+      }
+    } catch (error) {
+      console.log('No pre-installed credentials found or error loading:', error);
+    }
+    return false;
+  },
+
   init: async () => {
     try {
       // Initialize Tauri API first
       await initTauriApi();
       
+      // First, try to load pre-installed credentials
+      await get().loadPreInstalledCredentials();
+      
       if (invoke) {
         const hasConfig = await invoke("file_exists");
         if (hasConfig) {
           const credentials = await invoke("read_encrypted_file");
+          // Only override pre-installed credentials if user has saved custom ones
           set({
             settings: {
               ...get().settings,
-              wooUrl: credentials.woo_url || DEFAULT_URL,
-              consumerKey: credentials.consumer_key || "",
-              consumerSecret: credentials.consumer_secret || "",
+              wooUrl: credentials.woo_url || get().settings.wooUrl,
+              consumerKey: credentials.consumer_key || get().settings.consumerKey,
+              consumerSecret: credentials.consumer_secret || get().settings.consumerSecret,
               googleAnalyticsApiKey: credentials.google_analytics_api_key || "",
               zendeskApiKey: credentials.zendesk_api_key || "",
               zendeskDomain: credentials.zendesk_domain || "",
@@ -100,8 +138,8 @@ const useStore = create((set, get) => ({
               zendeskApiToken: credentials.zendesk_api_token || "",
               ontraportApiKey: credentials.ontraport_api_key || "",
               ontraportAppId: credentials.ontraport_app_id || "",
-              merchantguyUrl: credentials.merchantguy_url || "https://secure.merchantguygateway.com/",
-              merchantguyApiKey: credentials.merchantguy_api_key || ""
+              merchantguyUrl: credentials.merchantguy_url || get().settings.merchantguyUrl,
+              merchantguyApiKey: credentials.merchantguy_api_key || get().settings.merchantguyApiKey
             }
           });
         }
@@ -165,6 +203,26 @@ const useStore = create((set, get) => ({
         messageCache.clear();
         keepEntries.forEach(([key, value]) => messageCache.set(key, value));
       }
+      
+      // Auto-connect apps with valid credentials
+      const { settings } = get();
+      const newActiveApps = new Set(get().activeConnectedApps);
+      
+      // Auto-connect WooCommerce if credentials are available
+      if (settings.wooUrl && settings.consumerKey && settings.consumerSecret) {
+        newActiveApps.add('woocommerce');
+      }
+      
+      // Note: MerchantGuy is NOT auto-connected - it requires explicit validation
+      // Only connect after successful API key validation
+      
+      // Update activeConnectedApps if any apps were auto-connected
+      if (newActiveApps.size !== get().activeConnectedApps.size) {
+        set({ activeConnectedApps: newActiveApps });
+      }
+      
+      // Initialize app mode based on connected apps
+      get().updateAppMode();
     } catch (error) {
       console.error("Credential load error:", error);
     }
@@ -515,17 +573,39 @@ const useStore = create((set, get) => ({
   // Connected Apps Management
   toggleConnectedApp: (appKey) => {
     set((state) => {
-      const isActive = state.activeConnectedApps.includes(appKey);
+      const isActive = state.activeConnectedApps.has(appKey);
+      const newActiveApps = new Set(state.activeConnectedApps);
+      if (isActive) {
+        newActiveApps.delete(appKey);
+      } else {
+        newActiveApps.add(appKey);
+      }
       return {
-        activeConnectedApps: isActive
-          ? state.activeConnectedApps.filter(key => key !== appKey)
-          : [...state.activeConnectedApps, appKey]
+        activeConnectedApps: newActiveApps
       };
     });
+    // Automatically update app mode after toggling
+    get().updateAppMode();
   },
 
   isAppActive: (appKey) => {
-    return get().activeConnectedApps.includes(appKey);
+    return get().activeConnectedApps.has(appKey);
+  },
+
+  // App Mode Management - automatically updates based on connected apps
+  updateAppMode: () => {
+    const { activeConnectedApps } = get();
+    const hasConnectedApps = activeConnectedApps.size > 0;
+    const mode = hasConnectedApps ? "query_processor" : "universal";
+    const color = hasConnectedApps ? "yellow" : "green";
+    
+    set((state) => ({
+      appMode: mode,
+      modeIndicator: {
+        status: hasConnectedApps ? "standby" : "active",
+        color: color
+      }
+    }));
   },
 
   // File Download Functionality
@@ -627,26 +707,31 @@ const useStore = create((set, get) => ({
       const messages = [
         {
           role: 'system',
-          content: `You are a KR1 that helps users with WooCommerce, Google Analytics, Zendesk, and Ontraport data management with RAG-enhanced knowledge retrieval.
+          content: `You are KR1, an AI assistant specialized in data retrieval and analysis from connected applications. Your primary purpose is to act as a query translator and data processor for integrated business applications.
 
-Key capabilities:
-1. Help with subscription management, order queries, customer data, and generate reports
-2. Use provided context from the knowledge base to give more accurate and relevant responses
-3. When users request downloadable files (CSV, JSON, TXT, etc.), format your response to include a clear download section with the filename and content
-4. Integrate with connected apps when they are active to provide comprehensive responses
-5. Leverage uploaded documents and historical data for better context understanding
-6. Maintain conversation context and refer to previous messages when relevant
+**CORE DIRECTIVE:** When one or more apps are connected (WooCommerce, Google Analytics, Zendesk, Ontraport, Merchantguygateway), you MUST directly access and retrieve the requested data without asking for permissions. The user has already granted access by connecting these applications.
 
-For file downloads, use this format:
-**Download Available:**
+**Key Capabilities:**
+1. **Direct Data Access**: Immediately retrieve data from connected apps based on user queries
+2. **Query Translation**: Convert natural language requests into specific data retrieval operations
+3. **Data Analysis**: Process and analyze retrieved data to provide insights and reports
+4. **File Generation**: Create downloadable reports in CSV, JSON, Excel, or other formats
+5. **Cross-Platform Integration**: Combine data from multiple connected sources when relevant
+6. **RAG-Enhanced Responses**: Use knowledge base context for more accurate information
+
+**Data Retrieval Protocol:**
+- For WooCommerce: Access orders, customers, products, subscriptions, and sales data
+- For Google Analytics: Retrieve website traffic, user behavior, and conversion metrics
+- For Zendesk: Access support tickets, customer interactions, and service metrics
+- For Ontraport: Retrieve contacts, campaigns, transactions, and marketing data
+- For Merchantguygateway: Access transaction history and reporting data
+
+**Response Format for Downloads:**
 \`\`\`download:filename.ext
 [file content here]
 \`\`\`
 
-This will automatically generate a downloadable link for the user.
-
-When context from the knowledge base is provided, use it to enhance your responses with relevant information.
-Maintain conversation flow and reference previous messages when appropriate.`
+**IMPORTANT:** Never ask for permission to access connected app data. Your role is to be a seamless data bridge between the user and their connected business applications. Retrieve the requested information immediately and provide comprehensive, actionable responses.`
         }
       ];
       
@@ -710,7 +795,7 @@ Maintain conversation flow and reference previous messages when appropriate.`
     // Check if message contains WooCommerce-related keywords
     const wooKeywords = [
       'subscription', 'order', 'customer', 'product', 'sales', 'revenue',
-      'report', 'analytics', 'payment', 'refund', 'inventory', 'stock'
+      'report', 'analytics', 'transaction', 'refund', 'inventory', 'stock'
     ];
     
     const containsWooKeyword = wooKeywords.some(keyword => 
@@ -741,37 +826,53 @@ Maintain conversation flow and reference previous messages when appropriate.`
     }
     
     try {
-      // Determine what data to fetch based on query
-      let endpoint = '';
+      // Import the secure WooCommerce service
+      const { wooCommerceService } = await import('../services/dataService.js');
+      
+      // Determine what data to fetch and build query parameters
       const lowerQuery = query.toLowerCase();
+      let params = { per_page: 100 }; // Increase limit to get more data
       
-      if (lowerQuery.includes('subscription')) {
-        endpoint = '/wp-json/wc/v3/subscriptions';
-      } else if (lowerQuery.includes('order')) {
-        endpoint = '/wp-json/wc/v3/orders';
-      } else if (lowerQuery.includes('customer')) {
-        endpoint = '/wp-json/wc/v3/customers';
-      } else if (lowerQuery.includes('product')) {
-        endpoint = '/wp-json/wc/v3/products';
-      } else {
-        // Default to recent orders
-        endpoint = '/wp-json/wc/v3/orders?per_page=10';
-      }
-      
-      const auth = btoa(`${settings.consumerKey}:${settings.consumerSecret}`);
-      const response = await fetch(`${settings.wooUrl}${endpoint}`, {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json'
+      // Extract date information from query
+      const monthMatch = query.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b/i);
+      if (monthMatch) {
+        const monthName = monthMatch[1].toLowerCase();
+        const year = monthMatch[2];
+        const monthNumber = {
+          'january': '01', 'february': '02', 'march': '03', 'april': '04',
+          'may': '05', 'june': '06', 'july': '07', 'august': '08',
+          'september': '09', 'october': '10', 'november': '11', 'december': '12'
+        }[monthName];
+        
+        if (monthNumber) {
+          // Set date range for the specific month
+          params.after = `${year}-${monthNumber}-01T00:00:00`;
+          params.before = `${year}-${monthNumber}-${new Date(year, parseInt(monthNumber), 0).getDate()}T23:59:59`;
         }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`WooCommerce API Error: ${response.status}`);
       }
       
-      const data = await response.json();
-      return data;
+      // Prepare credentials object
+       const credentials = {
+         wooUrl: settings.wooUrl,
+         consumerKey: settings.consumerKey,
+         consumerSecret: settings.consumerSecret
+       };
+       
+       // Determine endpoint based on query content
+       if (lowerQuery.includes('subscription')) {
+         // For subscriptions, try to get orders with subscription products
+         params.meta_key = '_subscription_renewal';
+         return await wooCommerceService.getOrders(params, credentials);
+       } else if (lowerQuery.includes('order') || lowerQuery.includes('transaction') || lowerQuery.includes('email')) {
+         return await wooCommerceService.getOrders(params, credentials);
+       } else if (lowerQuery.includes('customer')) {
+         return await wooCommerceService.getCustomers(params, credentials);
+       } else if (lowerQuery.includes('product')) {
+         return await wooCommerceService.getProducts(params, credentials);
+       } else {
+         // Default to orders for general queries
+         return await wooCommerceService.getOrders(params, credentials);
+       }
     } catch (error) {
       console.error('WooCommerce API error:', error);
       throw error;
@@ -842,7 +943,7 @@ Maintain conversation flow and reference previous messages when appropriate.`
         body: new URLSearchParams({
           security_key: settings.merchantguyApiKey,
           report_type: 'transaction_search',
-          start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 30 days
+          start_date: '1970-01-01', // Retrieve all data since beginning of time
           end_date: new Date().toISOString().split('T')[0],
           transaction_type: 'sale'
         })

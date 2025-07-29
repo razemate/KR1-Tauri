@@ -467,24 +467,27 @@ main {
   padding: 20px;
   overflow-y: auto;
   scroll-behavior: smooth;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .welcome-message {
   text-align: center;
-  padding: 40px 20px;
+  padding: 30px 20px;
   color: #2c3e50;
 }
 
 .welcome-message h3 {
   margin: 0 0 10px 0;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   color: #34495e;
 }
 
 .welcome-message p {
   margin: 0 0 30px 0;
   color: #7f8c8d;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .quick-commands {
@@ -513,56 +516,114 @@ main {
 }
 
 .message {
-  margin-bottom: 20px;
-  padding: 15px;
-  border-radius: 12px;
-  max-width: 80%;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 18px;
+  max-width: 75%;
   position: relative;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  word-wrap: break-word;
 }
 
 .message.user {
-  background: linear-gradient(135deg, #3498db, #2ecc71);
+  background: linear-gradient(135deg, #007bff, #0056b3);
   color: white;
   margin-left: auto;
-  border-bottom-right-radius: 4px;
+  margin-right: 0;
+  border-bottom-right-radius: 6px;
+  align-self: flex-end;
 }
 
 .message.assistant {
-  background: #f8f9fa;
+  background: #ffffff;
   color: #2c3e50;
-  border: 1px solid #e9ecef;
-  border-bottom-left-radius: 4px;
+  border: 1px solid #e1e8ed;
+  border-bottom-left-radius: 6px;
+  margin-right: auto;
+  margin-left: 0;
+  align-self: flex-start;
 }
 
 .message-role {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   opacity: 0.8;
 }
 
 .message-content {
-  line-height: 1.6;
+  line-height: 1.4;
+  font-size: 14px;
+}
+
+/* Markdown content styling for smaller fonts */
+.message-content p {
+  font-size: 14px;
+  margin: 6px 0;
+}
+
+.message-content h1 {
+  font-size: 16px;
+  margin: 10px 0 6px 0;
+}
+
+.message-content h2 {
+  font-size: 15px;
+  margin: 8px 0 5px 0;
+}
+
+.message-content h3 {
+  font-size: 14px;
+  margin: 6px 0 4px 0;
+}
+
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+  font-size: 14px;
+  margin: 6px 0 4px 0;
+}
+
+.message-content ul,
+.message-content ol {
+  font-size: 14px;
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.message-content li {
+  margin: 1px 0;
+}
+
+.message-content blockquote {
+  font-size: 14px;
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 3px solid #ddd;
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .message-content pre {
   background: rgba(0, 0, 0, 0.05);
-  padding: 10px;
+  padding: 6px;
   border-radius: 6px;
   overflow-x: auto;
+  font-size: 12px;
 }
 
 .message-content code {
   background: rgba(0, 0, 0, 0.05);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 1px 3px;
+  border-radius: 3px;
   font-family: 'Courier New', monospace;
+  font-size: 12px;
 }
 
 .message-timestamp {
-  font-size: 11px;
+  font-size: 10px;
   opacity: 0.6;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 /* Loading Indicator */
@@ -591,6 +652,83 @@ main {
 
 .typing-dot:nth-child(3) {
   animation-delay: 0.4s;
+}
+
+/* Download Container Styles */
+.download-container {
+  margin: 12px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.download-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+}
+
+.download-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+}
+
+.download-item:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+}
+
+.download-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.download-filename {
+  font-weight: 500;
+  color: #495057;
+  font-size: 14px;
+}
+
+.download-btn {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.download-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 123, 255, 0.3);
+}
+
+/* Connection Status Styles */
+.connection-status {
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  color: #28a745 !important;
+  font-weight: 500;
 }
 
 /* Enhanced Table Styles */
@@ -639,7 +777,7 @@ main {
 .markdown-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
   min-width: 600px;
 }
 
@@ -1068,18 +1206,23 @@ main {
 
 .message-input {
   flex: 1;
-  padding: 12px 16px;
+  padding: 14px 18px;
   border: 2px solid #e9ecef;
   border-radius: 8px;
   font-size: 16px;
   background: white;
   transition: all 0.3s ease;
   resize: none;
-  min-height: 48px;
+  min-height: 54px;
   max-height: 200px;
   line-height: 1.4;
   font-family: inherit;
   overflow-y: hidden;
+}
+
+.message-input::placeholder {
+  font-size: 14px;
+  color: #6c757d;
 }
 
 .message-input:focus {

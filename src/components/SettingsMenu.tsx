@@ -75,42 +75,42 @@ export const SettingsMenu = () => {
   };
 
   return (
-    <div className="p-6 bg-white">
-      <h3 className="text-xl font-semibold text-gray-900 mb-6">OpenRouter Configuration</h3>
+    <div className="p-1 bg-white">
+      <h4 className="text-xs font-medium text-gray-800 mb-1">OpenRouter Configuration</h4>
       
-      <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-lg border border-gray-200 mb-6">
-        <span className="text-sm font-medium text-gray-700">Current Provider:</span>
-        <span className="text-sm font-medium text-green-600">OpenRouter (Default)</span>
+      <div className="flex items-center gap-2 p-1 bg-gray-50 rounded border border-gray-200 mb-1">
+        <span className="text-xs font-medium text-gray-700">Current Provider:</span>
+        <span className="text-xs font-medium text-green-600">OpenRouter (Default)</span>
       </div>
 
-      <div className="p-6 border border-gray-200 rounded-lg bg-white">
-        <div className="flex justify-between items-center mb-4">
-          <h4 className="text-lg font-semibold text-gray-900">OpenRouter API Key</h4>
+      <div className="p-1 border border-gray-200 rounded bg-white">
+        <div className="flex justify-between items-center mb-2">
+          <h5 className="text-sm font-medium text-gray-900">OpenRouter API Key</h5>
           <a 
             href="https://openrouter.ai/keys" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline"
+            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline"
           >
-            Get API Key <FiExternalLink size={14} />
+            Get API Key <FiExternalLink size={12} />
           </a>
         </div>
               
-        <div className="flex gap-3 items-start flex-wrap">
-          <div className="relative flex items-center flex-1 min-w-[300px]">
+        <div className="flex gap-2 items-start flex-wrap">
+          <div className="relative flex items-center flex-1 min-w-[250px]">
             <input
               type={showApiKey ? "text" : "password"}
               value={openRouterConfig.apiKey}
               onChange={handleApiKeyChange}
               placeholder="Enter OpenRouter API key (sk-or-...)"
-              className="w-full pr-10 pl-3 py-3 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pr-8 pl-2 py-2 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
             <button
               type="button"
               onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 p-0 border-none bg-transparent cursor-pointer flex items-center justify-center"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 p-0 border-none bg-transparent cursor-pointer flex items-center justify-center"
             >
-              {showApiKey ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+              {showApiKey ? <FiEyeOff size={14} /> : <FiEye size={14} />}
             </button>
           </div>
           
@@ -118,7 +118,7 @@ export const SettingsMenu = () => {
             type="button"
             onClick={validateKey}
             disabled={isValidating || !openRouterConfig.apiKey}
-            className="px-4 py-3 bg-teal-600 text-white border-none rounded-md text-sm font-medium cursor-pointer hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-2 bg-teal-600 text-white border-none rounded text-xs font-medium cursor-pointer hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {isValidating ? "Validating..." : "Validate"}
           </button>
@@ -127,29 +127,29 @@ export const SettingsMenu = () => {
             type="button"
             onClick={saveKey}
             disabled={!openRouterConfig.apiKey}
-            className="px-4 py-3 bg-green-600 text-white border-none rounded-md text-sm font-medium cursor-pointer hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-2 bg-green-600 text-white border-none rounded text-xs font-medium cursor-pointer hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             Save
           </button>
         </div>
             
-        <small className="text-sm text-gray-600 mt-3 block">Available Models: {openRouterConfig.availableModels?.length || 0}</small>
-        <div className="border-t border-gray-200 my-4"></div>
+        <small className="text-xs text-gray-600 mt-2 block">Available Models: {openRouterConfig.availableModels?.length || 32}</small>
+        <div className="border-t border-gray-200 my-2"></div>
         {validationResult && (
-          <div className={`mt-4 p-4 rounded-lg border ${
+          <div className={`mt-2 p-2 rounded border ${
             validationResult.success 
               ? 'bg-green-50 border-green-200 text-green-800' 
               : 'bg-red-50 border-red-200 text-red-800'
           }`}>
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2">
               <div className="flex-shrink-0 mt-0.5">
                 {validationResult.success ? 
-                  <FiCheck className="text-green-600" size={16} /> : 
-                  <FiAlertCircle className="text-red-600" size={16} />
+                  <FiCheck className="text-green-600" size={14} /> : 
+                  <FiAlertCircle className="text-red-600" size={14} />
                 }
               </div>
               <div className="flex-1">
-                <div className="font-medium text-sm">{validationResult.message}</div>
+                <div className="font-medium text-xs">{validationResult.message}</div>
               </div>
             </div>
           </div>
