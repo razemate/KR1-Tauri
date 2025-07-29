@@ -22,7 +22,7 @@ export const SettingsMenu = () => {
     setValidationResult(null);
   };
 
-  const validateKey = async () => {
+  const validateAndSaveKey = async () => {
     if (!openRouterConfig.apiKey) {
       setValidationResult({ success: false, message: "API key is required" });
       return;
@@ -46,31 +46,20 @@ export const SettingsMenu = () => {
 
     setIsValidating(true);
     try {
+      // First validate the API key
       await validateOpenRouterApiKey(openRouterConfig.apiKey);
-      setValidationResult({ success: true, message: 'OpenRouter API key is valid!' });
+      
+      // Then save it
+      const success = await saveOpenRouterApiKey(openRouterConfig.apiKey);
+      if (success) {
+        setValidationResult({ success: true, message: 'OpenRouter API key validated and saved successfully!' });
+      } else {
+        setValidationResult({ success: false, message: 'Failed to save OpenRouter API key' });
+      }
     } catch (error) {
       setValidationResult({ success: false, message: error.message });
     } finally {
       setIsValidating(false);
-    }
-  };
-
-  const saveKey = async () => {
-    if (!openRouterConfig.apiKey) {
-      alert('Please enter an API key first');
-      return;
-    }
-    
-    try {
-      const success = await saveOpenRouterApiKey(openRouterConfig.apiKey);
-      if (success) {
-        alert('OpenRouter API key saved successfully!');
-      } else {
-        alert('Failed to save OpenRouter API key');
-      }
-    } catch (error) {
-      console.error('Error saving OpenRouter API key:', error);
-      alert('Failed to save OpenRouter API key');
     }
   };
 
@@ -116,20 +105,11 @@ export const SettingsMenu = () => {
           
           <button
             type="button"
-            onClick={validateKey}
+            onClick={validateAndSaveKey}
             disabled={isValidating || !openRouterConfig.apiKey}
             className="px-3 py-2 bg-teal-600 text-white border-none rounded text-xs font-medium cursor-pointer hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {isValidating ? "Validating..." : "Validate"}
-          </button>
-          
-          <button
-            type="button"
-            onClick={saveKey}
-            disabled={!openRouterConfig.apiKey}
-            className="px-3 py-2 bg-green-600 text-white border-none rounded text-xs font-medium cursor-pointer hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          >
-            Save
+            {isValidating ? "Validating..." : "Validate and Save"}
           </button>
         </div>
             

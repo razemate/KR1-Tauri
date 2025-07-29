@@ -9,9 +9,19 @@ const isTauri = typeof window !== 'undefined' && window.__TAURI_IPC__;
 // Safely import Tauri API only if available
 let invoke = null;
 const initTauriApi = async () => {
-  // For now, disable Tauri API to avoid import issues in browser
-  invoke = null;
-  console.log('Running in browser mode - Tauri API disabled for testing');
+  if (typeof window !== 'undefined' && window.__TAURI__) {
+    try {
+      const { invoke: tauriInvoke } = await import('@tauri-apps/api/tauri');
+      invoke = tauriInvoke;
+      console.log('Tauri API initialized successfully');
+    } catch (error) {
+      console.log('Failed to initialize Tauri API:', error);
+      invoke = null;
+    }
+  } else {
+    invoke = null;
+    console.log('Running in browser mode - Tauri API not available');
+  }
 };
 
 // Initialize immediately for browser environment
@@ -43,7 +53,9 @@ const useStore = create((set, get) => ({
   status: "idle",
   uploadedFiles: [],
   isLoading: false,
-  activeConnectedApps: [],
+  isCreatingSession: false,
+  activeConnectedApps: new Set(),
+  validatedApps: new Set(), // Track which apps have been successfully validated
   abortController: null,
   messageCache: new Map(),
   lastSaveTime: 0,
@@ -89,7 +101,7 @@ const useStore = create((set, get) => ({
   loadPreInstalledCredentials: async () => {
     try {
       if (invoke) {
-        // Try to load pre-installed credentials from .env.prod
+        // Try to load pre-installed credentials from .env.prod via Tauri
         const preInstalledCreds = await invoke("load_env_credentials");
         if (preInstalledCreds) {
           set({
@@ -102,9 +114,31 @@ const useStore = create((set, get) => ({
               merchantguyApiKey: preInstalledCreds.merchantguy_key || ""
             }
           });
-          console.log('Pre-installed credentials loaded successfully');
+          console.log('Pre-installed credentials loaded successfully from Tauri');
           return true;
         }
+      } else {
+        // Fallback for browser development mode - use hardcoded values from .env.prod
+        const preInstalledCreds = {
+          woo_base_url: "https://subscribers.katusaresearch.com",
+          woo_key: "ck_5bfc9d3660527a1938b6d6aedea4a683fac3ae77",
+          woo_secret: "cs_741088df54d1688e002e7048e15fe82e35c01557",
+          merchantguy_base_url: "https://secure.merchantguygateway.com/api/transact.php",
+          merchantguy_key: "aSk77747CqDyvX834gM34jPy5arj327r"
+        };
+        
+        set({
+          settings: {
+            ...get().settings,
+            wooUrl: preInstalledCreds.woo_base_url,
+            consumerKey: preInstalledCreds.woo_key,
+            consumerSecret: preInstalledCreds.woo_secret,
+            merchantguyUrl: preInstalledCreds.merchantguy_base_url,
+            merchantguyApiKey: preInstalledCreds.merchantguy_key
+          }
+        });
+        console.log('Pre-installed credentials loaded successfully from fallback');
+        return true;
       }
     } catch (error) {
       console.log('No pre-installed credentials found or error loading:', error);
@@ -204,22 +238,74 @@ const useStore = create((set, get) => ({
         keepEntries.forEach(([key, value]) => messageCache.set(key, value));
       }
       
+      // Load persisted connected apps state
+      let persistedConnectedApps = new Set();
+      try {
+        if (invoke) {
+          // Try to load from Tauri storage
+          const savedConnectedApps = await invoke("get_connected_apps").catch(() => null);
+          if (savedConnectedApps && Array.isArray(savedConnectedApps)) {
+            persistedConnectedApps = new Set(savedConnectedApps);
+          }
+        } else {
+          // Load from localStorage for browser
+          const savedApps = localStorage.getItem('connected_apps');
+          if (savedApps) {
+            const parsedApps = JSON.parse(savedApps);
+            if (Array.isArray(parsedApps)) {
+              persistedConnectedApps = new Set(parsedApps);
+            }
+          }
+        }
+      } catch (error) {
+        console.log('No persisted connected apps found:', error);
+      }
+
+      // Load persisted validated apps state
+      let persistedValidatedApps = new Set();
+      try {
+        if (invoke) {
+          // Try to load from Tauri storage
+          const savedValidatedApps = await invoke("get_validated_apps").catch(() => null);
+          if (savedValidatedApps && Array.isArray(savedValidatedApps)) {
+            persistedValidatedApps = new Set(savedValidatedApps);
+          }
+        } else {
+          // Load from localStorage for browser
+          const savedValidatedApps = localStorage.getItem('validated_apps');
+          if (savedValidatedApps) {
+            const parsedValidatedApps = JSON.parse(savedValidatedApps);
+            if (Array.isArray(parsedValidatedApps)) {
+              persistedValidatedApps = new Set(parsedValidatedApps);
+            }
+          }
+        }
+      } catch (error) {
+        console.log('No persisted validated apps found:', error);
+      }
+      
       // Auto-connect apps with valid credentials
       const { settings } = get();
-      const newActiveApps = new Set(get().activeConnectedApps);
+      const newActiveApps = new Set(persistedConnectedApps);
       
       // Auto-connect WooCommerce if credentials are available
       if (settings.wooUrl && settings.consumerKey && settings.consumerSecret) {
         newActiveApps.add('woocommerce');
       }
       
-      // Note: MerchantGuy is NOT auto-connected - it requires explicit validation
-      // Only connect after successful API key validation
-      
-      // Update activeConnectedApps if any apps were auto-connected
-      if (newActiveApps.size !== get().activeConnectedApps.size) {
-        set({ activeConnectedApps: newActiveApps });
+      // Auto-connect MerchantGuy if credentials are available (for persistence)
+      if (settings.merchantguyApiKey && settings.merchantguyUrl) {
+        newActiveApps.add('merchantguy');
       }
+      
+      // Update activeConnectedApps and validatedApps
+      set({ 
+        activeConnectedApps: newActiveApps,
+        validatedApps: persistedValidatedApps
+      });
+      
+      // Save the updated connected apps state
+      get().saveConnectedAppsState();
       
       // Initialize app mode based on connected apps
       get().updateAppMode();
@@ -230,6 +316,10 @@ const useStore = create((set, get) => ({
 
   setActiveTab: (tab) => {
     set({ activeTab: tab });
+  },
+
+  setIsCreatingSession: (isCreating) => {
+    set({ isCreatingSession: isCreating });
   },
 
   setOpenRouterApiKey: (apiKey) => {
@@ -584,12 +674,77 @@ const useStore = create((set, get) => ({
         activeConnectedApps: newActiveApps
       };
     });
+    // Save the updated connected apps state
+    get().saveConnectedAppsState();
     // Automatically update app mode after toggling
     get().updateAppMode();
   },
 
+  // Save connected apps state to storage
+  saveConnectedAppsState: async () => {
+    const { activeConnectedApps } = get();
+    const appsArray = Array.from(activeConnectedApps);
+    
+    try {
+      if (invoke) {
+        // Save to Tauri storage
+        await invoke("save_connected_apps", { apps: appsArray });
+      } else {
+        // Save to localStorage for browser
+        localStorage.setItem('connected_apps', JSON.stringify(appsArray));
+      }
+    } catch (error) {
+      console.error('Failed to save connected apps state:', error);
+    }
+  },
+
   isAppActive: (appKey) => {
     return get().activeConnectedApps.has(appKey);
+  },
+
+  // Validated Apps Management
+  addValidatedApp: (appKey) => {
+    set((state) => {
+      const newValidatedApps = new Set(state.validatedApps);
+      newValidatedApps.add(appKey);
+      return {
+        validatedApps: newValidatedApps
+      };
+    });
+    get().saveValidatedAppsState();
+  },
+
+  removeValidatedApp: (appKey) => {
+    set((state) => {
+      const newValidatedApps = new Set(state.validatedApps);
+      newValidatedApps.delete(appKey);
+      return {
+        validatedApps: newValidatedApps
+      };
+    });
+    get().saveValidatedAppsState();
+  },
+
+  isAppValidated: (appKey) => {
+    return get().validatedApps.has(appKey);
+  },
+
+  // Save validated apps state to storage
+  saveValidatedAppsState: async () => {
+    const { validatedApps } = get();
+    const appsArray = Array.from(validatedApps);
+    
+    try {
+      if (invoke) {
+        // Save to Tauri storage
+        await invoke("save_validated_apps", { apps: appsArray });
+      } else {
+        // Save to localStorage for browser
+        localStorage.setItem('validated_apps', JSON.stringify(appsArray));
+      }
+    } catch (error) {
+      console.error('Failed to save validated apps state:', error);
+    }
   },
 
   // App Mode Management - automatically updates based on connected apps
@@ -639,7 +794,15 @@ const useStore = create((set, get) => ({
         switch (appKey) {
           case 'woocommerce':
             if (settings.consumerKey && settings.consumerSecret) {
+              console.log('Processing WooCommerce data for message:', message);
               const wooData = await get().getWooCommerceData(message);
+              console.log('WooCommerce data received:', {
+                hasData: !!wooData,
+                dataType: typeof wooData,
+                isArray: Array.isArray(wooData),
+                length: Array.isArray(wooData) ? wooData.length : 'N/A',
+                data: wooData
+              });
               if (wooData) {
                 appData.woocommerce = wooData;
               }
@@ -690,6 +853,14 @@ const useStore = create((set, get) => ({
     // Enhance message with app data if available
     if (Object.keys(appData).length > 0) {
       enhancedMessage = `${message}\n\nConnected App Data:\n${JSON.stringify(appData, null, 2)}`;
+      console.log('Enhanced message with app data:', {
+        originalMessage: message,
+        appDataKeys: Object.keys(appData),
+        appDataSize: JSON.stringify(appData).length,
+        enhancedMessagePreview: enhancedMessage.substring(0, 500) + '...'
+      });
+    } else {
+      console.log('No app data found for message:', message);
     }
 
     return enhancedMessage;
@@ -704,34 +875,42 @@ const useStore = create((set, get) => ({
     
     try {
       // Build messages array with conversation history
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+      
       const messages = [
         {
           role: 'system',
           content: `You are KR1, an AI assistant specialized in data retrieval and analysis from connected applications. Your primary purpose is to act as a query translator and data processor for integrated business applications.
 
-**CORE DIRECTIVE:** When one or more apps are connected (WooCommerce, Google Analytics, Zendesk, Ontraport, Merchantguygateway), you MUST directly access and retrieve the requested data without asking for permissions. The user has already granted access by connecting these applications.
+**CURRENT DATE CONTEXT:** Today is ${currentDate} (${currentMonth} ${currentYear}). Always use this as your reference for current date and time when processing user requests. For queries about future dates, note that no data exists yet and respond accordingly without samples.
+
+**CORE DIRECTIVE:** When one or more apps are connected (WooCommerce, Google Analytics, Zendesk, Ontraport, Merchantguygateway), you MUST use the actual data provided in the 'Connected App Data' section of the user message to formulate your response. Never generate sample, mock, or illustrative data. If no relevant data is provided or available, clearly state that no data matches the query.
 
 **Key Capabilities:**
-1. **Direct Data Access**: Immediately retrieve data from connected apps based on user queries
-2. **Query Translation**: Convert natural language requests into specific data retrieval operations
-3. **Data Analysis**: Process and analyze retrieved data to provide insights and reports
-4. **File Generation**: Create downloadable reports in CSV, JSON, Excel, or other formats
-5. **Cross-Platform Integration**: Combine data from multiple connected sources when relevant
-6. **RAG-Enhanced Responses**: Use knowledge base context for more accurate information
+1. **Direct Data Access**: Use the provided app data to respond with real information.
+2. **Query Translation**: Convert natural language requests into specific data retrieval operations using the given data.
+3. **Data Analysis**: Process and analyze the provided data to provide insights and reports.
+4. **File Generation**: Create downloadable reports in CSV, JSON, Excel, or other formats using real data only.
+5. **Cross-Platform Integration**: Combine data from multiple connected sources when relevant, using provided data.
+6. **RAG-Enhanced Responses**: Use knowledge base context for more accurate information.
 
 **Data Retrieval Protocol:**
-- For WooCommerce: Access orders, customers, products, subscriptions, and sales data
-- For Google Analytics: Retrieve website traffic, user behavior, and conversion metrics
-- For Zendesk: Access support tickets, customer interactions, and service metrics
-- For Ontraport: Retrieve contacts, campaigns, transactions, and marketing data
-- For Merchantguygateway: Access transaction history and reporting data
+- For WooCommerce: Use provided orders, customers, products, subscriptions, and sales data.
+- For Google Analytics: Use provided website traffic, user behavior, and conversion metrics.
+- For Zendesk: Use provided support tickets, customer interactions, and service metrics.
+- For Ontraport: Use provided contacts, campaigns, transactions, and marketing data.
+- For Merchantguygateway: Use provided transaction history and reporting data.
 
-**Response Format for Downloads:**
-\`\`\`download:filename.ext
-[file content here]
-\`\`\`
-
-**IMPORTANT:** Never ask for permission to access connected app data. Your role is to be a seamless data bridge between the user and their connected business applications. Retrieve the requested information immediately and provide comprehensive, actionable responses.`
+**CRITICAL INSTRUCTIONS:**
+- NEVER generate downloadable files or use download code blocks unless explicitly requested by the user
+- NEVER create sample data, mock data, or placeholder content
+- Always base responses on the actual 'Connected App Data' provided
+- Never ask for permission to access data
+- If data is unavailable (e.g., for future dates), state 'No data available for the specified criteria.'
+- Provide comprehensive, actionable responses using real data only
+- Only generate files when the user specifically asks for a file download`
         }
       ];
       
@@ -833,6 +1012,12 @@ const useStore = create((set, get) => ({
       const lowerQuery = query.toLowerCase();
       let params = { per_page: 100 }; // Increase limit to get more data
       
+      console.log('WooCommerce API Request:', {
+        url: settings.wooUrl,
+        query: lowerQuery,
+        params
+      });
+      
       // Extract date information from query
       const monthMatch = query.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b/i);
       if (monthMatch) {
@@ -859,20 +1044,30 @@ const useStore = create((set, get) => ({
        };
        
        // Determine endpoint based on query content
+       let result;
        if (lowerQuery.includes('subscription')) {
          // For subscriptions, try to get orders with subscription products
          params.meta_key = '_subscription_renewal';
-         return await wooCommerceService.getOrders(params, credentials);
+         result = await wooCommerceService.getOrders(params, credentials);
        } else if (lowerQuery.includes('order') || lowerQuery.includes('transaction') || lowerQuery.includes('email')) {
-         return await wooCommerceService.getOrders(params, credentials);
+         result = await wooCommerceService.getOrders(params, credentials);
        } else if (lowerQuery.includes('customer')) {
-         return await wooCommerceService.getCustomers(params, credentials);
+         result = await wooCommerceService.getCustomers(params, credentials);
        } else if (lowerQuery.includes('product')) {
-         return await wooCommerceService.getProducts(params, credentials);
+         result = await wooCommerceService.getProducts(params, credentials);
        } else {
          // Default to orders for general queries
-         return await wooCommerceService.getOrders(params, credentials);
+         result = await wooCommerceService.getOrders(params, credentials);
        }
+       
+       console.log('WooCommerce API Response:', {
+         dataLength: Array.isArray(result) ? result.length : 'Not an array',
+         dataType: typeof result,
+         firstItem: Array.isArray(result) && result.length > 0 ? result[0] : 'No data',
+         result: result
+       });
+       
+       return result;
     } catch (error) {
       console.error('WooCommerce API error:', error);
       throw error;
@@ -935,7 +1130,8 @@ const useStore = create((set, get) => ({
     
     try {
       // Query recent transactions using Merchantguy's query methodology
-      const response = await fetch('https://secure.networkmerchants.com/api/query.php', {
+      console.log('Using Merchantguy URL:', settings.merchantguyUrl);
+      const response = await fetch(settings.merchantguyUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -1172,7 +1368,8 @@ const useStore = create((set, get) => ({
     
     try {
       // Test the Merchantguy API key using their query methodology
-      const response = await fetch('https://secure.networkmerchants.com/api/query.php', {
+      console.log('Validating Merchantguy API key against URL:', url);
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

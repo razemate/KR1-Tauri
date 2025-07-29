@@ -221,20 +221,20 @@ const ChatInterface = () => {
         </ReactMarkdown>
         
         {downloads.length > 0 && (
-          <div className="download-container">
-            <div className="download-header">
-              <FiDownload />
-              <span>Downloads Available</span>
+          <div className="download-container-enhanced">
+            <div className="download-header-enhanced">
+              <FiDownload className="text-green-600" />
+              <span className="font-semibold text-green-800">Downloads Available</span>
             </div>
             {downloads.map((download, index) => (
-              <div key={index} className="download-item">
+              <div key={index} className="download-item-enhanced">
                 <div className="download-info">
-                  <FiFile />
+                  <FiFile className="text-blue-600" />
                   <span className="download-filename">{download.filename}</span>
                   <span className="text-xs text-gray-500">({formatFileSize(new Blob([download.content]).size)})</span>
                 </div>
                 <button 
-                  className="download-btn"
+                  className="download-btn-enhanced"
                   onClick={() => handleDownload(download.filename, download.content)}
                   title={`Download ${download.filename}`}
                 >
@@ -400,29 +400,33 @@ const ChatInterface = () => {
     return null;
   });
 
-  // Performance optimized message renderer
+  // Performance optimized message renderer with proper chat bubbles
   const MessageItem = React.memo(({ msg, index }) => (
-    <div key={index} className={`message ${msg.role}`}>
-      <div className="message-role">
-        {msg.role === "user" ? "You" : "OpenRouter AI"}
-      </div>
-      <div className="message-content">
-        {renderMessageContent(msg.content)}
-        {msg.attachments && msg.attachments.length > 0 && (
-          <div className="message-attachments">
-            <div className="attachments-label">Attached Files:</div>
-            {msg.attachments.map((file, fileIndex) => (
-              <div key={fileIndex} className="attachment-item">
-                <FiFile className="attachment-icon" />
-                <span className="attachment-name">{file.name}</span>
-                <span className="attachment-size">({formatFileSize(file.size)})</span>
-              </div>
-            ))}
+    <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className={`max-w-[75%] ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+        <div className={`message-bubble ${msg.role === 'user' ? 'user-bubble' : 'ai-bubble'}`}>
+          <div className="message-role">
+            {msg.role === "user" ? "You" : "OpenRouter AI"}
           </div>
-        )}
-      </div>
-      <div className="message-timestamp">
-        {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}
+          <div className="message-content">
+            {renderMessageContent(msg.content)}
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div className="message-attachments">
+                <div className="attachments-label">Attached Files:</div>
+                {msg.attachments.map((file, fileIndex) => (
+                  <div key={fileIndex} className="attachment-item">
+                    <FiFile className="attachment-icon" />
+                    <span className="attachment-name">{file.name}</span>
+                    <span className="attachment-size">({formatFileSize(file.size)})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="message-timestamp">
+            {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}
+          </div>
+        </div>
       </div>
     </div>
   ));
@@ -461,50 +465,59 @@ const ChatInterface = () => {
               </option>
             ))}
           </select>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${openRouterConfig.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+            <span className={`text-sm italic ${openRouterConfig.isConnected ? 'text-green-600' : 'text-red-600'}`}
+>
+              {openRouterConfig.isConnected ? 'Connected to OpenRouter' : 'Not Connected'}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${openRouterConfig.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
-          <span className={`text-sm ${openRouterConfig.isConnected ? 'connection-status' : 'text-gray-700'}`}>
-            {openRouterConfig.isConnected ? 'Connected to OpenRouter' : 'Not Connected'}
-          </span>
-        </div>
+        <PerformanceMonitor />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <PerformanceMonitor />
-        {messages.length === 0 && (
-          <div className="welcome-message">
-            <h3>Welcome!</h3>
-          </div>
-        )}
-        
-        {messages.map((msg, index) => (
-          <MessageItem key={`${msg.timestamp || Date.now()}-${index}`} msg={msg} index={index} />
-        ))}
-        
-        {/* Enhanced Loading Indicator */}
-        {isLoading && (
-          <div className="message assistant loading">
-            <div className="message-role">OpenRouter AI</div>
-            <div className="message-content">
-              <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="typing-indicator">
-                  <div className="typing-dot"></div>
-                  <div className="typing-dot"></div>
-                  <div className="typing-dot"></div>
-                </div>
-                <span className="text-blue-700 font-medium">AI is processing your request...</span>
+      <div className="flex-1 overflow-y-auto">
+        <div className="messages-container px-[250px]">
+          <div className="messages-wrapper">
+            {messages.length === 0 && (
+              <div className="welcome-message">
+                <h3>Welcome!</h3>
               </div>
-            </div>
+            )}
+            
+            {messages.map((msg, index) => (
+              <MessageItem key={`${msg.timestamp || Date.now()}-${index}`} msg={msg} index={index} />
+            ))}
+            
+            {/* Enhanced Loading Indicator with proper bubble */}
+            {isLoading && (
+              <div className="flex justify-start mb-4">
+                <div className="max-w-[75%]">
+                  <div className="message-bubble ai-bubble">
+                    <div className="message-role">OpenRouter AI</div>
+                    <div className="message-content">
+                      <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="typing-indicator">
+                          <div className="typing-dot"></div>
+                          <div className="typing-dot"></div>
+                          <div className="typing-dot"></div>
+                        </div>
+                        <span className="text-blue-700 font-medium">AI is processing your request...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div ref={messagesEndRef} />
           </div>
-        )}
-        
-        <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Uploaded Files Display */}
       {uploadedFiles.length > 0 && (
-        <div className="border-t border-gray-200 bg-gray-50 p-4">
+        <div className="border-t border-gray-200 bg-gray-50 p-4" style={{marginLeft: '200px', marginRight: '200px'}}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-gray-700">Attached Files ({uploadedFiles.length})</span>
             <button 
@@ -538,7 +551,7 @@ const ChatInterface = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="border-t border-gray-200 bg-white p-4">
+      <form onSubmit={handleSubmit} className="border-t border-gray-200 bg-white p-4 w-full max-w-3xl mx-auto px-4 sm:px-6" style={{marginLeft: '200px', marginRight: '200px', marginBottom: '200px'}}>
         <div className="flex items-end gap-2">
           <button 
             type="button" 

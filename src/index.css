@@ -1,8 +1,47 @@
 /* Import Tailwind's base styles */
-@tailwind base;
+@import 'tailwindcss/base';
 
 /* Import Tailwind's component styles */
-@tailwind components;
+@import 'tailwindcss/components';
 
 /* Import Tailwind's utility styles */
-@tailwind utilities;
+@import 'tailwindcss/utilities';
+
+@layer components {
+  .chat-container {
+    @apply flex flex-col items-center justify-center min-h-screen w-full px-4;
+  }
+
+  .chat-active {
+    @apply items-stretch justify-end;
+  }
+}
+
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.chat-container.chat-active {
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+
+@layer components {
+  .chat-container {
+    @apply flex flex-col items-center justify-center min-h-screen w-full px-4;
+  }
+
+  .chat-active {
+    @apply items-stretch justify-end;
+  }
+}
+

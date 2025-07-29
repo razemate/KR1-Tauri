@@ -20,10 +20,15 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.8.3", features = [] }
 reqwest = { version = "0.11", features = ["json"] }
 tokio = { version = "1.0", features = ["full"] }
+rand = "0.8"
+hex = "0.4"
 dotenvy = "0.15"
 base64 = "0.21"
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2.1"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["wincred", "winnt", "minwindef", "winerror"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import useStore from '../store/woo-store';
-import kr1Logo from '../assets/kr1-logo.svg';
+import kr1Logo from '../assets/kr1-logo.png';
 import SettingsPanel from './SettingsPanel';
 
 const Sidebar = () => {
@@ -20,8 +20,10 @@ const Sidebar = () => {
     isAppActive,
     toggleConnectedApp,
     isCreatingSession,
+    setIsCreatingSession,
     appMode,
-    modeIndicator
+    modeIndicator,
+    validatedApps
   } = useStore();
   
   const [editingSessionId, setEditingSessionId] = useState(null);
@@ -35,7 +37,8 @@ const Sidebar = () => {
     { key: 'merchantguy', name: 'Merchantguygateway', icon: '💳' }
   ];
   
-  const connectedApps = allApps.filter(app => activeConnectedApps.has(app.key));
+  // Show all validated apps, regardless of their toggle state
+  const connectedApps = allApps.filter(app => validatedApps.has(app.key));
   
   // Sort sessions: pinned first, then by timestamp (newest first)
   const sortedSessions = [...chatSessions].sort((a, b) => {
@@ -49,17 +52,26 @@ const Sidebar = () => {
   const displayedSessions = showAllHistory ? sortedSessions : sortedSessions.slice(0, 5);
   
   const handleNewChat = () => {
-    const last = chatSessions[chatSessions.length - 1];
-    // skip creation if last session is empty
-    if (last && last.title.trim() === "New Chat") {
-      // Load the existing empty session instead of creating a new one
-      loadSession(last.id);
-      return;
-    }
-
-    const sessionId = createNewSession();
-    if (sessionId) {
-      loadSession(sessionId);
+    setIsCreatingSession(true);
+    try {
+      // Check if there's an existing empty session (no messages)
+      const emptySession = chatSessions.find(session => 
+        (!session.messages || session.messages.length === 0) && 
+        session.title === 'New Chat'
+      );
+      
+      if (emptySession) {
+        // Load the existing empty session instead of creating a new one
+        loadSession(emptySession.id);
+      } else {
+        // Create a new session
+        const sessionId = createNewSession();
+        if (sessionId) {
+          loadSession(sessionId);
+        }
+      }
+    } finally {
+      setIsCreatingSession(false);
     }
   };
   
@@ -117,10 +129,10 @@ const Sidebar = () => {
   };
   
   return (
-    <div className="w-full md:w-80 bg-white border-r border-gray-200 p-1 md:p-2 overflow-y-auto flex flex-col gap-1 md:gap-2">
+    <div className="w-full md:w-80 h-full bg-white border-r border-gray-200 p-1 md:p-2 overflow-y-auto flex flex-col gap-1 md:gap-2">
       {/* App Logo */}
       <div className="flex items-center justify-center py-0.5 md:py-1">
-        <img src={kr1Logo} alt="KR1 Logo" className="h-6 md:h-8 w-auto" />
+        <img src={kr1Logo} style={{ width: "96px", height: "96px" }} />
       </div>
       
       {/* App Mode Indicator */}
@@ -147,7 +159,7 @@ const Sidebar = () => {
               </svg>
             </button>
           </div>
-          <div className="max-h-60 md:max-h-80 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             <SettingsPanel />
           </div>
         </div>
@@ -323,3 +335,9 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
+
+
+
+
+
+

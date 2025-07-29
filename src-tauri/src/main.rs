@@ -1,15 +1,21 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod encryption;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
+use std::fs;
+use std::path::PathBuf;
 use tauri::command;
+use tauri::AppHandle;
 use reqwest::Client;
 use dotenvy::dotenv;
 use base64::Engine;
 use base64::engine::general_purpose;
 use urlencoding;
+use encryption::{store_encryption_key, get_encryption_key, delete_encryption_key, encryption_key_exists};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TransactionSearchRequest {
@@ -67,6 +73,170 @@ struct EnvCredentials {
     woo_secret: Option<String>,
     merchantguy_base_url: Option<String>,
     merchantguy_key: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ValidateCardRequest {
+    #[serde(rename = "apiKey")]
+    api_key: String,
+    url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ValidateCardResponse {
+    success: bool,
+    error: Option<String>,
+}
+
+// Helper function to get app data directory
+fn get_app_data_dir(app_handle: &AppHandle) -> Result<PathBuf, String> {
+    app_handle
+        .path_resolver()
+        .app_data_dir()
+        .ok_or_else(|| "Failed to get app data directory".to_string())
+}
+
+#[command]
+async fn save_connected_apps(app_handle: AppHandle, apps: Vec<String>) -> Result<(), String> {
+    let app_data_dir = get_app_data_dir(&app_handle)?;
+    
+    // Ensure the directory exists
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    
+    let file_path = app_data_dir.join("connected_apps.json");
+    let json_data = serde_json::to_string(&apps)
+        .map_err(|e| format!("Failed to serialize connected apps: {}", e))?;
+    
+    fs::write(file_path, json_data)
+        .map_err(|e| format!("Failed to save connected apps: {}", e))?;
+    
+    Ok(())
+}
+
+#[command]
+async fn get_connected_apps(app_handle: AppHandle) -> Result<Vec<String>, String> {
+    let app_data_dir = get_app_data_dir(&app_handle)?;
+    let file_path = app_data_dir.join("connected_apps.json");
+    
+    if !file_path.exists() {
+        return Ok(vec![]);
+    }
+    
+    let file_content = fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read connected apps file: {}", e))?;
+    
+    let apps: Vec<String> = serde_json::from_str(&file_content)
+        .map_err(|e| format!("Failed to parse connected apps: {}", e))?;
+    
+    Ok(apps)
+}
+
+#[command]
+async fn save_chat_sessions(app_handle: AppHandle, sessions: serde_json::Value) -> Result<(), String> {
+    let app_data_dir = get_app_data_dir(&app_handle)?;
+    
+    // Ensure the directory exists
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    
+    let file_path = app_data_dir.join("chat_sessions.json");
+    let json_data = serde_json::to_string(&sessions)
+        .map_err(|e| format!("Failed to serialize chat sessions: {}", e))?;
+    
+    fs::write(file_path, json_data)
+        .map_err(|e| format!("Failed to save chat sessions: {}", e))?;
+    
+    Ok(())
+}
+
+#[command]
+async fn get_chat_sessions(app_handle: AppHandle) -> Result<serde_json::Value, String> {
+    let app_data_dir = get_app_data_dir(&app_handle)?;
+    let file_path = app_data_dir.join("chat_sessions.json");
+    
+    if !file_path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+    
+    let file_content = fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read chat sessions file: {}", e))?;
+    
+    let sessions: serde_json::Value = serde_json::from_str(&file_content)
+        .map_err(|e| format!("Failed to parse chat sessions: {}", e))?;
+    
+    Ok(sessions)
+}
+
+#[command]
+async fn save_api_key(app_handle: AppHandle, key: String, value: String) -> Result<(), String> {
+    let app_data_dir = get_app_data_dir(&app_handle)?;
+    
+    // Ensure the directory exists
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    
+    let file_path = app_data_dir.join("api_keys.json");
+    
+    // Load existing keys or create new map
+    let mut api_keys: HashMap<String, String> = if file_path.exists() {
+        let file_content = fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read API keys file: {}", e))?;
+        serde_json::from_str(&file_content)
+            .map_err(|e| format!("Failed to parse API keys: {}", e))?
+    } else {
+        HashMap::new()
+    };
+    
+    // Update the specific key
+    api_keys.insert(key, value);
+    
+    // Save back to file
+    let json_data = serde_json::to_string(&api_keys)
+        .map_err(|e| format!("Failed to serialize API keys: {}", e))?;
+    
+    fs::write(file_path, json_data)
+        .map_err(|e| format!("Failed to save API keys: {}", e))?;
+    
+    Ok(())
+}
+
+#[command]
+async fn validate_card(request: ValidateCardRequest) -> Result<ValidateCardResponse, String> {
+    let client = Client::new();
+    
+    // Try to validate the API key by making a test request
+    let test_url = format!("{}/api/validate", request.url.trim_end_matches('/'));
+    
+    let response = client
+        .post(&test_url)
+        .header("Authorization", format!("Bearer {}", request.api_key))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({ "test": true }))
+        .send()
+        .await;
+    
+    match response {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                Ok(ValidateCardResponse {
+                    success: true,
+                    error: None,
+                })
+            } else {
+                Ok(ValidateCardResponse {
+                    success: false,
+                    error: Some(format!("HTTP {}: {}", resp.status(), resp.status().canonical_reason().unwrap_or("Unknown error"))),
+                })
+            }
+        }
+        Err(e) => {
+            Ok(ValidateCardResponse {
+                success: false,
+                error: Some(format!("Connection failed: {}", e)),
+            })
+        }
+    }
 }
 
 #[command]
@@ -329,7 +499,18 @@ fn main() {
             get_mgw_transactions,
             get_woo_orders,
             call_woocommerce_api,
-            load_env_credentials
+            load_env_credentials,
+
+            store_encryption_key,
+            get_encryption_key,
+            delete_encryption_key,
+            encryption_key_exists,
+            save_connected_apps,
+            get_connected_apps,
+            save_chat_sessions,
+            get_chat_sessions,
+            save_api_key,
+            validate_card
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -69,6 +69,8 @@ dependencies = [
  "base64 0.21.7",
  "chrono",
  "dotenvy",
+ "hex",
+ "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_json",
@@ -76,6 +78,7 @@ dependencies = [
  "tauri-build",
  "tokio",
  "urlencoding",
+ "winapi",
 ]
 
 [[package]]

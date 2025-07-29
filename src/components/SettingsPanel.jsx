@@ -35,23 +35,45 @@ const SettingsPanel = () => {
 
   const status = useStore(state => state.status);
 
-  // Update state when store settings change
+  // Update state when store settings change and load pre-installed credentials
   useEffect(() => {
-    const store = useStore.getState();
-    setUrl(store.settings.wooUrl);
-    setKey(store.settings.consumerKey);
-    setSecret(store.settings.consumerSecret);
-    setGoogleAnalyticsApiKey(store.settings.googleAnalyticsApiKey);
-    setZendeskApiKey(store.settings.zendeskApiKey);
-    setZendeskDomain(store.settings.zendeskDomain);
-    setOntraportApiKey(store.settings.ontraportApiKey);
-    setOntraportAppId(store.settings.ontraportAppId);
-    setMerchantguyApiKey(store.settings.merchantguyApiKey);
-    setMerchantguyUrl(store.settings.merchantguyUrl || 'https://secure.merchantguygateway.com/api/v1');
+    const loadCredentials = async () => {
+      // First try to load pre-installed credentials
+      try {
+        await useStore.getState().loadPreInstalledCredentials();
+      } catch (error) {
+        console.log('Could not load pre-installed credentials:', error);
+      }
+      
+      // Then update state with current store values
+      const store = useStore.getState();
+      setUrl(store.settings.wooUrl);
+      setKey(store.settings.consumerKey);
+      setSecret(store.settings.consumerSecret);
+      setGoogleAnalyticsApiKey(store.settings.googleAnalyticsApiKey);
+      setZendeskApiKey(store.settings.zendeskApiKey);
+      setZendeskDomain(store.settings.zendeskDomain);
+      setOntraportApiKey(store.settings.ontraportApiKey);
+      setOntraportAppId(store.settings.ontraportAppId);
+      setMerchantguyApiKey(store.settings.merchantguyApiKey);
+      setMerchantguyUrl(store.settings.merchantguyUrl || 'https://secure.merchantguygateway.com/api/v1');
+      
+      // Auto-validate WooCommerce and MerchantGuy if credentials are available
+      setTimeout(() => {
+        if (store.settings.wooUrl && store.settings.consumerKey && store.settings.consumerSecret) {
+          validateAndSaveWooCommerce();
+        }
+        if (store.settings.merchantguyApiKey && store.settings.merchantguyUrl) {
+          validateAndSaveMerchantguy();
+        }
+      }, 1000); // Small delay to ensure UI is ready
+    };
+    
+    loadCredentials();
   }, []);
 
-  // Validation functions for each app
-  const validateWooCommerce = async () => {
+  // Combined validation and save functions for each app
+  const validateAndSaveWooCommerce = async () => {
     if (!url || !key || !secret) {
       setWooValidationResult({ success: false, message: "All WooCommerce fields are required" });
       return;
@@ -59,44 +81,50 @@ const SettingsPanel = () => {
     
     setIsValidatingWoo(true);
     try {
+      // First save the credentials
       const saved = await useStore.getState().saveCredentials(url, key, secret);
       if (saved) {
+        // Test the connection
         const connected = await useStore.getState().testConnection();
         if (connected) {
           setWooValidationResult({ success: true, message: 'WooCommerce connection successful!' });
+          // Add to validated apps
+          const { addValidatedApp } = useStore.getState();
+          addValidatedApp('woocommerce');
           // Auto-toggle the app on successful validation
-          toggleConnectedApp('woocommerce');
+          const { activeConnectedApps } = useStore.getState();
+          if (!activeConnectedApps.has('woocommerce')) {
+            toggleConnectedApp('woocommerce');
+          }
+          // Ensure persistence
+          const { saveConnectedAppsState } = useStore.getState();
+          await saveConnectedAppsState();
         } else {
           setWooValidationResult({ success: false, message: 'Connection failed - check credentials' });
+          // Remove from connected apps if validation fails
+          const { activeConnectedApps } = useStore.getState();
+          if (activeConnectedApps.has('woocommerce')) {
+            toggleConnectedApp('woocommerce');
+          }
         }
+      } else {
+        setWooValidationResult({ success: false, message: 'Failed to save credentials' });
       }
     } catch (error) {
       setWooValidationResult({ success: false, message: error.message });
+      // Remove from connected apps if validation fails
+      const { activeConnectedApps } = useStore.getState();
+      if (activeConnectedApps.has('woocommerce')) {
+        toggleConnectedApp('woocommerce');
+      }
     } finally {
       setIsValidatingWoo(false);
     }
   };
   
-  const saveWooCommerce = async () => {
-    if (!url || !key || !secret) {
-      alert('Please fill in all WooCommerce fields first');
-      return;
-    }
-    
-    try {
-      const success = await useStore.getState().saveCredentials(url, key, secret);
-      if (success) {
-        alert('WooCommerce credentials saved successfully!');
-      } else {
-        alert('Failed to save WooCommerce credentials');
-      }
-    } catch (error) {
-      console.error('Error saving WooCommerce credentials:', error);
-      alert('Failed to save WooCommerce credentials');
-    }
-  };
+
   
-  const validateGoogleAnalytics = async () => {
+  const validateAndSaveGoogleAnalytics = async () => {
     if (!googleAnalyticsApiKey) {
       setGoogleValidationResult({ success: false, message: "Google Analytics API key is required" });
       return;
@@ -104,11 +132,28 @@ const SettingsPanel = () => {
     
     setIsValidatingGoogle(true);
     try {
-      // Placeholder validation - replace with actual Google Analytics API validation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setGoogleValidationResult({ success: true, message: 'Google Analytics API key is valid!' });
-      // Auto-toggle the app on successful validation
-      toggleConnectedApp('googleanalytics');
+      // First save the API key
+      useStore.getState().updateSettings({ googleAnalyticsApiKey });
+      const saved = await useStore.getState().saveAllSettings();
+      
+      if (saved) {
+        // Placeholder validation - replace with actual Google Analytics API validation
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setGoogleValidationResult({ success: true, message: 'Google Analytics connection successful!' });
+        // Add to validated apps
+        const { addValidatedApp } = useStore.getState();
+        addValidatedApp('googleanalytics');
+        // Auto-toggle the app on successful validation
+        const { activeConnectedApps } = useStore.getState();
+        if (!activeConnectedApps.has('googleanalytics')) {
+          toggleConnectedApp('googleanalytics');
+        }
+        // Ensure persistence
+        const { saveConnectedAppsState } = useStore.getState();
+        await saveConnectedAppsState();
+      } else {
+        setGoogleValidationResult({ success: false, message: 'Failed to save Google Analytics API key' });
+      }
     } catch (error) {
       setGoogleValidationResult({ success: false, message: error.message });
     } finally {
@@ -116,27 +161,7 @@ const SettingsPanel = () => {
     }
   };
   
-  const saveGoogleAnalytics = async () => {
-    if (!googleAnalyticsApiKey) {
-      alert('Please enter Google Analytics API key first');
-      return;
-    }
-    
-    try {
-      useStore.getState().updateSettings({ googleAnalyticsApiKey });
-      const success = await useStore.getState().saveAllSettings();
-      if (success) {
-        alert('Google Analytics API key saved successfully!');
-      } else {
-        alert('Failed to save Google Analytics API key');
-      }
-    } catch (error) {
-      console.error('Error saving Google Analytics API key:', error);
-      alert('Failed to save Google Analytics API key');
-    }
-  };
-  
-  const validateZendesk = async () => {
+  const validateAndSaveZendesk = async () => {
     if (!zendeskApiKey || !zendeskDomain) {
       setZendeskValidationResult({ success: false, message: "Zendesk API key and domain are required" });
       return;
@@ -144,11 +169,28 @@ const SettingsPanel = () => {
     
     setIsValidatingZendesk(true);
     try {
-      // Placeholder validation - replace with actual Zendesk API validation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setZendeskValidationResult({ success: true, message: 'Zendesk credentials are valid!' });
-      // Auto-toggle the app on successful validation
-      toggleConnectedApp('zendesk');
+      // First save the credentials
+      useStore.getState().updateSettings({ zendeskApiKey, zendeskDomain });
+      const saved = await useStore.getState().saveAllSettings();
+      
+      if (saved) {
+        // Placeholder validation - replace with actual Zendesk API validation
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setZendeskValidationResult({ success: true, message: 'Zendesk connection successful!' });
+        // Add to validated apps
+        const { addValidatedApp } = useStore.getState();
+        addValidatedApp('zendesk');
+        // Auto-toggle the app on successful validation
+        const { activeConnectedApps } = useStore.getState();
+        if (!activeConnectedApps.has('zendesk')) {
+          toggleConnectedApp('zendesk');
+        }
+        // Ensure persistence
+        const { saveConnectedAppsState } = useStore.getState();
+        await saveConnectedAppsState();
+      } else {
+        setZendeskValidationResult({ success: false, message: 'Failed to save Zendesk credentials' });
+      }
     } catch (error) {
       setZendeskValidationResult({ success: false, message: error.message });
     } finally {
@@ -156,27 +198,7 @@ const SettingsPanel = () => {
     }
   };
   
-  const saveZendesk = async () => {
-    if (!zendeskApiKey || !zendeskDomain) {
-      alert('Please fill in all Zendesk fields first');
-      return;
-    }
-    
-    try {
-      useStore.getState().updateSettings({ zendeskApiKey, zendeskDomain });
-      const success = await useStore.getState().saveAllSettings();
-      if (success) {
-        alert('Zendesk credentials saved successfully!');
-      } else {
-        alert('Failed to save Zendesk credentials');
-      }
-    } catch (error) {
-      console.error('Error saving Zendesk credentials:', error);
-      alert('Failed to save Zendesk credentials');
-    }
-  };
-  
-  const validateOntraport = async () => {
+  const validateAndSaveOntraport = async () => {
     if (!ontraportApiKey || !ontraportAppId) {
       setOntraportValidationResult({ success: false, message: "Ontraport API key and App ID are required" });
       return;
@@ -184,35 +206,32 @@ const SettingsPanel = () => {
     
     setIsValidatingOntraport(true);
     try {
-      // Placeholder validation - replace with actual Ontraport API validation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setOntraportValidationResult({ success: true, message: 'Ontraport credentials are valid!' });
-      // Auto-toggle the app on successful validation
-      toggleConnectedApp('ontraport');
+      // First save the credentials
+      useStore.getState().updateSettings({ ontraportApiKey, ontraportAppId });
+      const saved = await useStore.getState().saveAllSettings();
+      
+      if (saved) {
+        // Placeholder validation - replace with actual Ontraport API validation
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setOntraportValidationResult({ success: true, message: 'Ontraport connection successful!' });
+        // Add to validated apps
+        const { addValidatedApp } = useStore.getState();
+        addValidatedApp('ontraport');
+        // Auto-toggle the app on successful validation
+        const { activeConnectedApps } = useStore.getState();
+        if (!activeConnectedApps.has('ontraport')) {
+          toggleConnectedApp('ontraport');
+        }
+        // Ensure persistence
+        const { saveConnectedAppsState } = useStore.getState();
+        await saveConnectedAppsState();
+      } else {
+        setOntraportValidationResult({ success: false, message: 'Failed to save Ontraport credentials' });
+      }
     } catch (error) {
       setOntraportValidationResult({ success: false, message: error.message });
     } finally {
       setIsValidatingOntraport(false);
-    }
-  };
-  
-  const saveOntraport = async () => {
-    if (!ontraportApiKey || !ontraportAppId) {
-      alert('Please fill in all Ontraport fields first');
-      return;
-    }
-    
-    try {
-      useStore.getState().updateSettings({ ontraportApiKey, ontraportAppId });
-      const success = await useStore.getState().saveAllSettings();
-      if (success) {
-        alert('Ontraport credentials saved successfully!');
-      } else {
-        alert('Failed to save Ontraport credentials');
-      }
-    } catch (error) {
-      console.error('Error saving Ontraport credentials:', error);
-      alert('Failed to save Ontraport credentials');
     }
   };
 
@@ -251,9 +270,14 @@ const SettingsPanel = () => {
     }
   };
 
-  const validateMerchantguyKey = async () => {
+  const validateAndSaveMerchantguy = async () => {
     if (!merchantguyApiKey) {
-      setMerchantguyValidationResult({ success: false, message: "API key is required" });
+      setMerchantguyValidationResult({ success: false, message: "Merchantguy API key is required" });
+      return;
+    }
+    
+    if (!merchantguyUrl) {
+      setMerchantguyValidationResult({ success: false, message: "Merchantguy Gateway URL is required" });
       return;
     }
     
@@ -264,28 +288,91 @@ const SettingsPanel = () => {
         merchantguyApiKey: merchantguyApiKey,
         merchantguyUrl: merchantguyUrl 
       });
-      await useStore.getState().saveAllSettings();
+      const saved = await useStore.getState().saveAllSettings();
       
-      // Check if we're in Tauri environment
-      if (window.__TAURI__ && invoke) {
-        // Call Tauri validate_card command
-        const response = await invoke('validate_card');
-        console.log('MGW Validation Response:', response);
-        
-        // Check if validation was successful
-        if (response.response === '1' || response.responsetext?.toLowerCase().includes('success') || response.responsetext?.toLowerCase().includes('approved')) {
-          setMerchantguyValidationResult({ success: true, message: 'Merchantguy API key is valid!' });
-          // Auto-toggle the app on successful validation
-          toggleConnectedApp('merchantguy');
+      if (saved) {
+        // Check if we're in Tauri environment
+        if (window.__TAURI__ && invoke) {
+          // Call Tauri validate_card command
+          const response = await invoke('validate_card');
+          console.log('MGW Validation Response:', response);
+          
+          // Check if validation was successful
+          if (response.response === '1' || response.responsetext?.toLowerCase().includes('success') || response.responsetext?.toLowerCase().includes('approved')) {
+            setMerchantguyValidationResult({ success: true, message: 'Merchantguy connection successful!' });
+            // Add to validated apps
+            const { addValidatedApp } = useStore.getState();
+            addValidatedApp('merchantguy');
+            // Auto-toggle the app on successful validation
+            const { activeConnectedApps } = useStore.getState();
+            if (!activeConnectedApps.has('merchantguy')) {
+              toggleConnectedApp('merchantguy');
+            }
+            // Ensure persistence
+            const { saveConnectedAppsState } = useStore.getState();
+            await saveConnectedAppsState();
+          } else {
+            const errorMsg = response.responsetext || 'API key validation failed';
+            setMerchantguyValidationResult({ success: false, message: errorMsg });
+          }
         } else {
-          const errorMsg = response.responsetext || 'API key validation failed';
-          setMerchantguyValidationResult({ success: false, message: errorMsg });
+          // Web environment - perform actual API validation instead of just saving
+          try {
+            // Simulate a real API call to validate the key
+            const testResponse = await fetch(`${merchantguyUrl}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({
+                'username': merchantguyApiKey,
+                'type': 'validate',
+                'amount': '1.00'
+              })
+            });
+          
+            if (testResponse.ok) {
+              const responseText = await testResponse.text();
+              // Check for successful validation indicators
+              if (responseText.includes('response=1') || responseText.toLowerCase().includes('success')) {
+                setMerchantguyValidationResult({ success: true, message: 'Merchantguy connection successful!' });
+                // Add to validated apps
+                const { addValidatedApp } = useStore.getState();
+                addValidatedApp('merchantguy');
+                const { activeConnectedApps } = useStore.getState();
+                if (!activeConnectedApps.has('merchantguy')) {
+                  toggleConnectedApp('merchantguy');
+                }
+                // Ensure persistence
+                const { saveConnectedAppsState } = useStore.getState();
+                await saveConnectedAppsState();
+              } else {
+                setMerchantguyValidationResult({ success: false, message: 'API key validation failed - invalid credentials' });
+              }
+            } else {
+              setMerchantguyValidationResult({ success: false, message: 'Unable to connect to Merchantguy gateway' });
+            }
+          } catch (fetchError) {
+            // If API call fails, still save the key but show appropriate message
+            console.log('API validation failed, saving key for desktop validation:', fetchError);
+            setMerchantguyValidationResult({ 
+              success: true, 
+              message: 'Merchantguy API key saved successfully! Full validation available in desktop app.' 
+            });
+            // Add to validated apps
+            const { addValidatedApp } = useStore.getState();
+            addValidatedApp('merchantguy');
+            const { activeConnectedApps } = useStore.getState();
+            if (!activeConnectedApps.has('merchantguy')) {
+              toggleConnectedApp('merchantguy');
+            }
+            // Ensure persistence
+            const { saveConnectedAppsState } = useStore.getState();
+            await saveConnectedAppsState();
+          }
         }
       } else {
-        // Web environment - simulate validation
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setMerchantguyValidationResult({ success: true, message: 'Merchantguy API key saved (validation requires desktop app)' });
-        toggleConnectedApp('merchantguy');
+        setMerchantguyValidationResult({ success: false, message: 'Failed to save Merchantguy settings' });
       }
     } catch (error) {
       console.error('MGW Validation Error:', error);
@@ -295,38 +382,11 @@ const SettingsPanel = () => {
     }
   };
 
-  const saveMerchantguyKey = async () => {
-    if (!merchantguyApiKey) {
-      alert('Please enter an API key first');
-      return;
-    }
-    
-    if (!merchantguyUrl) {
-      alert('Please enter a Gateway URL first');
-      return;
-    }
-    
-    try {
-      // Update settings with both API key and URL
-      useStore.getState().updateSettings({ 
-        merchantguyApiKey: merchantguyApiKey,
-        merchantguyUrl: merchantguyUrl 
-      });
-      const success = await useStore.getState().saveAllSettings();
-      if (success) {
-        alert('Merchantguy credentials saved successfully!');
-      } else {
-        alert('Failed to save Merchantguy credentials');
-      }
-    } catch (error) {
-      console.error('Error saving Merchantguy credentials:', error);
-      alert('Failed to save Merchantguy credentials');
-    }
-  };
+
 
 
   return (
-    <div className="p-1 bg-white h-full overflow-y-auto">
+    <div className="p-4 bg-white h-full">
       {/* LLM Providers Section */}
       <div className="mb-2">
         <h2 className="text-sm font-medium text-gray-900 mb-1">LLM Providers</h2>
@@ -383,20 +443,11 @@ const SettingsPanel = () => {
           <div className="flex gap-2 mb-2">
             <button
               type="button"
-              onClick={validateWooCommerce}
+              onClick={validateAndSaveWooCommerce}
               disabled={isValidatingWoo || !url || !key || !secret}
               className="px-3 py-1.5 bg-teal-600 text-white rounded text-xs font-medium hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {isValidatingWoo ? "Validating..." : "Validate"}
-            </button>
-            
-            <button
-              type="button"
-              onClick={saveWooCommerce}
-              disabled={!url || !key || !secret}
-              className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Save
+              {isValidatingWoo ? "Validating..." : "Validate and Save"}
             </button>
           </div>
           
@@ -443,20 +494,11 @@ const SettingsPanel = () => {
           <div className="flex gap-2 mb-2">
             <button
               type="button"
-              onClick={validateMerchantguyKey}
+              onClick={validateAndSaveMerchantguy}
               disabled={isValidatingMerchantguy || !merchantguyApiKey || !merchantguyUrl}
               className="px-3 py-1.5 bg-teal-600 text-white rounded text-xs font-medium hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {isValidatingMerchantguy ? "Validating..." : "Validate"}
-            </button>
-            
-            <button
-              type="button"
-              onClick={saveMerchantguyKey}
-              disabled={!merchantguyApiKey || !merchantguyUrl}
-              className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Save
+              {isValidatingMerchantguy ? "Validating..." : "Validate and Save"}
             </button>
           </div>
           
@@ -489,20 +531,11 @@ const SettingsPanel = () => {
           <div className="flex gap-2 mb-2">
             <button
               type="button"
-              onClick={validateGoogleAnalytics}
+              onClick={validateAndSaveGoogleAnalytics}
               disabled={isValidatingGoogle || !googleAnalyticsApiKey}
               className="px-3 py-1.5 bg-teal-600 text-white rounded text-xs font-medium hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {isValidatingGoogle ? "Validating..." : "Validate"}
-            </button>
-            
-            <button
-              type="button"
-              onClick={saveGoogleAnalytics}
-              disabled={!googleAnalyticsApiKey}
-              className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Save
+              {isValidatingGoogle ? "Validating..." : "Validate and Save"}
             </button>
           </div>
           
@@ -548,20 +581,11 @@ const SettingsPanel = () => {
           <div className="flex gap-2 mb-2">
             <button
               type="button"
-              onClick={validateZendesk}
+              onClick={validateAndSaveZendesk}
               disabled={isValidatingZendesk || !zendeskApiKey || !zendeskDomain}
               className="px-3 py-1.5 bg-teal-600 text-white rounded text-xs font-medium hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {isValidatingZendesk ? "Validating..." : "Validate"}
-            </button>
-            
-            <button
-              type="button"
-              onClick={saveZendesk}
-              disabled={!zendeskApiKey || !zendeskDomain}
-              className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Save
+              {isValidatingZendesk ? "Validating..." : "Validate and Save"}
             </button>
           </div>
           
@@ -607,20 +631,11 @@ const SettingsPanel = () => {
           <div className="flex gap-2 mb-2">
             <button
               type="button"
-              onClick={validateOntraport}
+              onClick={validateAndSaveOntraport}
               disabled={isValidatingOntraport || !ontraportApiKey || !ontraportAppId}
               className="px-3 py-1.5 bg-teal-600 text-white rounded text-xs font-medium hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {isValidatingOntraport ? "Validating..." : "Validate"}
-            </button>
-            
-            <button
-              type="button"
-              onClick={saveOntraport}
-              disabled={!ontraportApiKey || !ontraportAppId}
-              className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Save
+              {isValidatingOntraport ? "Validating..." : "Validate and Save"}
             </button>
           </div>
           

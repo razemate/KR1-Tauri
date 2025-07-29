@@ -17,8 +17,8 @@ const ResizableLayout = ({ leftPanel, rightPanel, minLeftWidth = 250, maxLeftWid
       // Ensure minimum width for right panel (at least 300px)
       const maxAllowedLeftWidth = Math.min(maxLeftWidth, containerWidth - 300);
       
-      // Constrain width within bounds
-      const constrainedWidth = Math.max(minLeftWidth, Math.min(maxAllowedLeftWidth, newWidth));
+      // Constrain width within bounds with minimum of 200px
+      const constrainedWidth = Math.max(200, Math.min(maxAllowedLeftWidth, newWidth));
       setLeftWidth(constrainedWidth);
     };
 
@@ -47,32 +47,29 @@ const ResizableLayout = ({ leftPanel, rightPanel, minLeftWidth = 250, maxLeftWid
   };
 
   return (
-    <div ref={containerRef} className="flex h-full w-full relative overflow-hidden">
+    <div ref={containerRef} className="flex h-screen w-full relative">
       {/* Left Panel */}
       <div 
-        className="flex-shrink-0 h-full overflow-hidden"
+        className="flex-shrink-0 h-full"
         style={{ width: `${leftWidth}px` }}
       >
-        <div className="w-full h-full">
-          {leftPanel}
-        </div>
+        {leftPanel}
       </div>
       
-      {/* Resizer */}
+      {/* Resizer - Subtle divider */}
       <div
         ref={resizerRef}
-        className="w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors duration-200 relative group flex-shrink-0 h-full"
+        className="w-1 bg-gray-200 cursor-col-resize transition-colors duration-200 relative group flex-shrink-0 h-full hover:bg-gray-300"
         onMouseDown={handleMouseDown}
+        style={{ margin: 0, padding: 0, border: 'none' }}
       >
         {/* Visual indicator */}
-        <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-blue-400 group-hover:opacity-20 transition-all duration-200" />
+        <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-gray-400 group-hover:opacity-20 transition-all duration-200" />
       </div>
       
       {/* Right Panel */}
-      <div className="flex-1 min-w-0 h-full overflow-hidden">
-        <div className="w-full h-full">
-          {rightPanel}
-        </div>
+      <div className="flex-1 h-full">
+        {rightPanel}
       </div>
     </div>
   );
